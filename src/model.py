@@ -12,10 +12,12 @@
 # =============================================================================
 
 # --- Import the libraries we need ---
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import numpy as np                          # For numerical operations
 import matplotlib.pyplot as plt             # For plotting training history
 import tensorflow as tf                     # The main deep learning library
-from tensorflow import keras               # High-level API for building models
+import keras               # High-level API for building models
 
 
 # =============================================================================
