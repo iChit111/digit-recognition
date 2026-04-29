@@ -229,7 +229,7 @@ def _plot_training_history(history):
 # SECTION 3: SAVE THE MODEL
 # =============================================================================
 
-def save_model(model, filepath="model.h5"):
+def save_model(model, filepath="results/model.h5"):
     """
     Saves the trained model to disk in HDF5 (.h5) format.
 
@@ -297,7 +297,7 @@ if __name__ == "__main__":
     print(f"  Test Accuracy : {test_accuracy * 100:.2f}%")
 
     # --- Step 6: Save the trained model ---
-    save_model(model, filepath="model.h5")
+    save_model(model, filepath="results/model.h5")
 
     # --- Step 7: Final summary ---
     print("\n" + "=" * 60)

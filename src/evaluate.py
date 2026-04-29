@@ -31,7 +31,7 @@ from data_loader import load_data, preprocess_data
 # SECTION 1: LOAD THE SAVED MODEL
 # =============================================================================
 
-def load_trained_model(filepath="model.h5"):
+def load_trained_model(filepath="results/model.h5"):
     """
     Loads a previously trained and saved Keras model from disk.
 
@@ -301,7 +301,7 @@ if __name__ == "__main__":
     _, x_test = preprocess_data(x_train_raw, x_test_raw)
 
     # --- Step 3: Load the trained model ---
-    model = load_trained_model(filepath="model.h5")
+    model = load_trained_model(filepath="results/model.h5")
 
     # --- Step 4: Overall accuracy + loss ---
     test_loss, test_accuracy = evaluate_model(model, x_test, y_test)
