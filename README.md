@@ -63,8 +63,6 @@ python --version
 pip install -r requirements.txt
 ```
 
-This installs TensorFlow, Keras, NumPy, Matplotlib, scikit-learn, and Jupyter.
-
 ---
 
 ## 🚀 How to Run (in order)
@@ -86,7 +84,7 @@ python src/model.py
 ```
 - Builds a 3-layer neural network (784 → 128 → 64 → 10)
 - Trains for 10 epochs on 54,000 training images
-- Plots and saves training loss/accuracy curves
+- Plots and saves training loss/accuracy curves to `results/`
 - Saves the trained model to `results/model.h5`
 
 ### Step 3 — Evaluate the model
@@ -99,34 +97,61 @@ python src/evaluate.py
 - Shows the first 15 images the model got wrong
 
 ### Step 4 — Run the demo
+The demo supports **three different input modes:**
+
+#### 🎲 Mode 1 — MNIST test set image (default)
+Pick any image from the 10,000 MNIST test images:
 ```bash
-python src/demo.py                        # Random test image
-python src/demo.py --index 42             # Specific image (0–9999)
+python src/demo.py                        # random test image
+python src/demo.py --index 42             # specific image by index (0–9999)
 python src/demo.py --random --count 5     # 5 random predictions in a row
 ```
-- Loads `results/model.h5`
-- Displays the digit image alongside a confidence bar chart
-- Saves each prediction to `results/demo_prediction_*.png`
+
+#### 🖼️ Mode 2 — Custom image file
+Supply your own PNG or JPG of a handwritten digit:
+```bash
+python src/demo.py --file my_digit.png
+```
+**Tips for best results:**
+- Draw your digit in **black ink on a white background** (e.g. in Paint or any drawing app)
+- Make the digit **large and centred** in the image
+- Save as **PNG** before running
+
+The script automatically inverts the colours to match MNIST's white-on-black format.
+
+#### ✏️ Mode 3 — Live drawing canvas
+Draw a digit with your mouse in a pop-up window:
+```bash
+python src/demo.py --draw
+```
+- A black 280×280 canvas opens — draw with left click and drag
+- Click **Predict** to run the model and see the confidence chart
+- Click **Clear** to wipe the canvas and draw again
+
+**Tips for best accuracy on the canvas:**
+- Draw your digit **large**, filling most of the canvas
+- Keep it **centred** — MNIST digits are always centred in the frame
+- Use **slow, deliberate strokes** rather than quick thin lines
 
 ---
 
 ## 🧠 Model Architecture
 
 ```
-Input Layer   →  784 units  (one per pixel of the 28×28 image)
-Hidden Layer 1 → 128 units  (ReLU activation)
-Hidden Layer 2 →  64 units  (ReLU activation)
-Output Layer  →  10 units   (Softmax activation — one per digit 0–9)
+Input Layer    →  784 units  (one per pixel of the 28×28 image, flattened)
+Hidden Layer 1 →  128 units  (ReLU activation)
+Hidden Layer 2 →   64 units  (ReLU activation)
+Output Layer   →   10 units  (Softmax — one probability per digit 0–9)
 ```
 
-| Setting          | Value                          |
-|------------------|-------------------------------|
-| Optimizer        | Adam                          |
-| Loss function    | Sparse Categorical Crossentropy |
-| Epochs           | 10                            |
-| Batch size       | 32                            |
-| Validation split | 10%                           |
-| Test accuracy    | ~97.5%                        |
+| Setting           | Value                           |
+|-------------------|---------------------------------|
+| Optimizer         | Adam                            |
+| Loss function     | Sparse Categorical Crossentropy |
+| Epochs            | 10                              |
+| Batch size        | 32                              |
+| Validation split  | 10%                             |
+| Test accuracy     | ~97.5%                          |
 
 ---
 
@@ -141,30 +166,31 @@ Training history and evaluation plots are saved in the `results/` folder after r
 
 ---
 
-## 👥 Team
-
-| Name | Role |
-|------|------|
-| Rudrank Suranje   | `data_loader.py` — data pipeline and preprocessing |
-| Ayush Chitnis  | `model.py` — neural network architecture and training |
-| Raj Wadhwani | `evaluate.py`, `demo.py`, README documentation |
-
----
-
 ## 📦 Dependencies
 
-| Library       | Purpose                          |
-|---------------|----------------------------------|
-| TensorFlow / Keras | Building and training the neural network |
-| NumPy         | Numerical operations on arrays   |
-| Matplotlib    | Plotting images and charts       |
-| scikit-learn  | Confusion matrix and metrics     |
-| Jupyter       | Optional: running notebooks      |
+| Library            | Purpose                                      |
+|--------------------|----------------------------------------------|
+| TensorFlow / Keras | Building and training the neural network     |
+| NumPy              | Numerical operations on arrays               |
+| Matplotlib         | Plotting images and charts                   |
+| scikit-learn       | Confusion matrix and classification metrics  |
+| Pillow             | Loading and resizing custom images for demo  |
+| Jupyter            | Optional: running notebooks                  |
 
 Install all at once:
 ```bash
 pip install -r requirements.txt
 ```
+
+---
+
+## 👥 Team
+
+| Name | Role |
+|------|------|
+| Rudrank Suranje       | `data_loader.py` — data pipeline and preprocessing |
+| Ayush Chitnis      | `model.py` — neural network architecture and training |
+| Raj Wadhwani | `evaluate.py`, `demo.py`, README documentation |
 
 ---
 
