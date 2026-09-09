@@ -6,3 +6,4 @@ scikit-learn
 jupyter
 pillow
 tensorflow-datasets
+importlib_resources
