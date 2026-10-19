@@ -2,22 +2,51 @@
 # model.py
 # Location: src/model.py
 #
-# Purpose: Define, compile, train, and save a neural network that classifies
-# handwritten digits (0–9) using the preprocessed MNIST data from data_loader.py.
+# Purpose: Build, train, evaluate, and save a dense (fully connected) neural
+# network that recognizes handwritten characters from EMNIST ByClass.
 #
-# A neural network is inspired by the human brain — it's made of layers of
-# "neurons" that pass signals to each other. By showing it tens of thousands
-# of labeled examples, it learns which patterns of pixels correspond to which
-# digits. Once trained, it can look at a brand-new image and predict the digit.
+# EMNIST ByClass has 62 classes: digits 0-9, uppercase A-Z, lowercase a-z.
+# This is a DENSE BASELINE. A CNN will be tried later as a separate experiment,
+# so we deliberately keep the architecture simple here.
+#
+# Run from the project root with:
+#     python src/model.py
 # =============================================================================
 
-# --- Import the libraries we need ---
-import os
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-import numpy as np                          # For numerical operations
-import matplotlib.pyplot as plt             # For plotting training history
-import tensorflow as tf                     # The main deep learning library
-import keras               # High-level API for building models
+# --- Step 1: Import the libraries we need ---
+import os                                    # For creating folders / building paths
+import numpy as np                           # For working with numbers and arrays
+import matplotlib.pyplot as plt              # For drawing the training-history chart
+from tensorflow import keras                 # The deep learning library (Keras API)
+from tensorflow.keras import layers          # Building blocks (Dense, Dropout, ...)
+from sklearn.model_selection import train_test_split  # Shuffled/stratified split
+
+# Our own project files (they live in the same src/ folder).
+from data_loader import load_data, preprocess_data, compute_class_weights
+from label_map import (
+    NUM_CLASSES,          # 62 -> single source of truth, never hardcode 62 here
+    DIGIT_LABELS,         # class indices for 0-9
+    UPPERCASE_LABELS,     # class indices for A-Z
+    LOWERCASE_LABELS,     # class indices for a-z
+)
+
+
+# =============================================================================
+# SETTINGS (change values here, not deep inside the functions)
+# =============================================================================
+
+SEED = 42                          # Makes the split and weight init repeatable
+VALIDATION_FRACTION = 0.10         # 10% of the training data is held out for validation
+MAX_EPOCHS = 100                   # Generous cap; EarlyStopping will stop sooner
+BATCH_SIZE = 128
+EARLY_STOP_PATIENCE = 5            # Stop if val_loss hasn't improved for 5 epochs
+USE_CLASS_WEIGHTS = True           # Flip to False to compare "with vs without" weighting
+
+# Output paths. Other scripts (evaluate.py, demo.py) load this exact file,
+# so do NOT change the path or the .h5 format without telling the team.
+RESULTS_DIR = "results"
+MODEL_PATH = "results/model.h5"
+HISTORY_PLOT_PATH = "results/training_history.png"
 
 
 # =============================================================================
@@ -26,64 +55,51 @@ import keras               # High-level API for building models
 
 def build_model():
     """
-    Constructs and returns a Keras Sequential neural network.
+    Builds the dense neural network (not trained yet).
 
-    Architecture (the layers stacked on top of each other):
-    ┌─────────────────────────────────────────────────────────┐
-    │  Input       → 784 units  (one per pixel)               │
-    │  Hidden #1   → 128 units  (ReLU activation)             │
-    │  Hidden #2   →  64 units  (ReLU activation)             │
-    │  Output      →  10 units  (Softmax activation)          │
-    └─────────────────────────────────────────────────────────┘
-
-    Why these choices?
-    - Sequential: layers are stacked one after the other in a straight line.
-    - Dense layers: every neuron is connected to every neuron in the next layer.
-    - ReLU (Rectified Linear Unit): a simple activation function — it outputs
-      the input if it's positive, otherwise outputs 0. This helps the network
-      learn non-linear patterns (e.g., curves and edges in digits).
-    - Softmax: squashes the 10 raw output scores into probabilities that sum
-      to 1.0, so the network's prediction is "I'm X% sure this is a 3."
+    Architecture:
+        Input (784 pixels)
+        -> Dense 512 + ReLU -> Dropout 0.3
+        -> Dense 256 + ReLU -> Dropout 0.2
+        -> Dense NUM_CLASSES (62) + Softmax
 
     Returns:
-        model: An uncompiled Keras Sequential model.
+        A compiled Keras model, ready for training.
     """
 
-    print("Building the neural network model...")
-
-    # keras.Sequential lets us build a model by adding layers one by one.
-    # Think of it like stacking Lego bricks — each layer transforms the data
-    # and passes the result to the next layer.
     model = keras.Sequential([
+        # An explicit Input layer tells Keras the shape of one example:
+        # 784 numbers (a flattened 28x28 image). This replaces the old,
+        # deprecated "input_shape=" argument on the first Dense layer.
+        keras.Input(shape=(784,)),
 
-        # --- Layer 1: Input + First Hidden Layer ---
-        # units=128: this layer has 128 neurons.
-        # activation="relu": each neuron fires only if its input is positive.
-        # input_shape=(784,): tells Keras the shape of ONE training example —
-        #   a flat array of 784 pixel values (28×28 image, already flattened).
-        #   This first layer automatically acts as our input layer.
-        keras.layers.Dense(units=128, activation="relu", input_shape=(784,)),
+        # Hidden layer 1: 512 "neurons". Wider than the old MNIST model (128)
+        # because telling apart 62 classes needs more capacity than 10.
+        layers.Dense(512, activation="relu"),
 
-        # --- Layer 2: Second Hidden Layer ---
-        # A smaller second hidden layer (64 neurons) helps the network
-        # compress what it learned in layer 1 into more abstract features.
-        # For example, layer 1 might detect edges; layer 2 might detect curves.
-        keras.layers.Dense(units=64, activation="relu"),
+        # Dropout randomly switches off 30% of neurons during training,
+        # which stops the network from simply memorizing the training images.
+        layers.Dropout(0.3),
 
-        # --- Layer 3: Output Layer ---
-        # units=10: one output neuron for each possible digit class (0 through 9).
-        # activation="softmax": converts the 10 raw scores into probabilities.
-        #   e.g., [0.02, 0.01, 0.03, 0.91, 0.01, ...] → the model thinks it's a 3.
-        # The digit with the highest probability is the model's final prediction.
-        keras.layers.Dense(units=10, activation="softmax"),
+        # Hidden layer 2: 256 neurons (was 64).
+        layers.Dense(256, activation="relu"),
+        layers.Dropout(0.2),
 
+        # Output layer: one neuron per class. Softmax turns the 62 outputs
+        # into probabilities that add up to 1.
+        # NUM_CLASSES comes from label_map.py so it can never drift out of sync.
+        layers.Dense(NUM_CLASSES, activation="softmax"),
     ])
 
-    # Print a table showing each layer's name, output shape, and parameter count.
-    # Parameters = the weights and biases the network learns during training.
-    model.summary()
+    # Our labels are whole numbers (0..61), not one-hot vectors, so we use
+    # "sparse" categorical crossentropy.
+    model.compile(
+        optimizer="adam",
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"],
+    )
 
-    print("\nModel built successfully!")
+    model.summary()
     return model
 
 
@@ -91,224 +107,232 @@ def build_model():
 # SECTION 2: TRAIN THE MODEL
 # =============================================================================
 
-def train_model(model, x_train, y_train, epochs=10, batch_size=32, validation_split=0.1):
+def train_model(model, x_train, y_train):
     """
-    Compiles and trains the model on the preprocessed MNIST training data.
+    Trains the model using a shuffled, seeded, stratified validation split
+    and EarlyStopping.
 
-    Training overview:
-      - The model sees the training images in small batches (32 at a time).
-      - After each batch, it compares its predictions to the true labels,
-        calculates how wrong it was (the "loss"), and adjusts its internal
-        weights slightly to do better next time. This adjustment is called
-        "backpropagation."
-      - One full pass through ALL the training data is called an "epoch."
-      - We train for multiple epochs so the model can keep improving.
+    Why not validation_split=0.1 in model.fit()?
+        Keras' validation_split takes the LAST 10% of the data WITHOUT
+        shuffling. If the data is ordered in any way, the validation set would
+        not be representative. Here we split ourselves instead.
 
     Args:
-        model:            The Keras model returned by build_model().
-        x_train:          Preprocessed training images → shape (60000, 784)
-        y_train:          Training labels (integers 0–9) → shape (60000,)
-        epochs:           How many full passes through the training data (default: 10).
-        batch_size:       Number of images processed before each weight update (default: 32).
-        validation_split: Fraction of training data held back to measure
-                          performance on unseen data during training (default: 10%).
+        model:   The compiled Keras model.
+        x_train: Training images, shape (N, 784).
+        y_train: Training labels, shape (N,).
 
     Returns:
-        history: A Keras History object containing loss and accuracy recorded
-                 at the end of each epoch. Useful for plotting training curves.
+        history: Keras History object (loss/accuracy for every epoch).
+        n_train: Number of images actually used for training (after the split).
+        n_val:   Number of images held out for validation.
     """
 
-    print("\nCompiling the model...")
+    # --- Step 2a: Shuffled + stratified train/validation split ---
+    # shuffle=True       -> mix the data before splitting
+    # random_state=SEED  -> same split every run (repeatable results)
+    # stratify=y_train   -> every class keeps (almost) the same share in both
+    #                       parts. Important here because some classes are rare.
+    x_tr, x_val, y_tr, y_val = train_test_split(
+        x_train, y_train,
+        test_size=VALIDATION_FRACTION,
+        random_state=SEED,
+        shuffle=True,
+        stratify=y_train,
+    )
+    print(f"\nTrain/validation split: {len(x_tr)} train, {len(x_val)} validation")
 
-    # --- Compile: configure HOW the model will learn ---
-    # Before training, we must tell Keras three things:
+    # --- Step 2b: Class weights ---
+    # EMNIST ByClass is HEAVILY IMBALANCED: some classes (like digits) have
+    # tens of thousands of examples while others (some lowercase letters, e.g.
+    # 'k' or 'z') have only a few thousand. Without correction, the model can
+    # score well overall by mostly getting the common classes right and
+    # ignoring the rare ones.
+    # Class weights fix this: a mistake on a rare class counts MORE in the loss,
+    # a mistake on a common class counts LESS. We compute them from the
+    # training portion only, using the helper in data_loader.py.
+    class_weight = compute_class_weights(y_tr) if USE_CLASS_WEIGHTS else None
+    print(f"Using class weights: {USE_CLASS_WEIGHTS}")
 
-    # 1. optimizer="adam"
-    #    The optimizer decides how to adjust the model's weights after each batch.
-    #    Adam (Adaptive Moment Estimation) is a popular, reliable choice — it
-    #    automatically adjusts the learning rate for each weight individually,
-    #    which usually leads to faster and more stable training than plain
-    #    gradient descent.
-
-    # 2. loss="sparse_categorical_crossentropy"
-    #    The loss function measures how wrong the model's predictions are.
-    #    We use "sparse_categorical_crossentropy" because:
-    #      - "categorical": we're classifying into multiple categories (10 digits).
-    #      - "sparse": our labels are plain integers (e.g., 3), NOT one-hot encoded
-    #        vectors (e.g., [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]).
-    #    A lower loss = better predictions.
-
-    # 3. metrics=["accuracy"]
-    #    This is just for reporting — it tells Keras to also track what percentage
-    #    of predictions are correct during training, so we can monitor progress.
-    model.compile(
-        optimizer="adam",
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"]
+    # --- Step 2c: EarlyStopping ---
+    # Watches the validation loss. If it hasn't improved for
+    # EARLY_STOP_PATIENCE epochs, training stops. restore_best_weights=True
+    # then rolls the model back to its best epoch (not the last one).
+    early_stop = keras.callbacks.EarlyStopping(
+        monitor="val_loss",
+        patience=EARLY_STOP_PATIENCE,
+        restore_best_weights=True,
+        verbose=1,
     )
 
-    print("  Optimizer : Adam")
-    print("  Loss      : sparse_categorical_crossentropy")
-    print("  Metrics   : accuracy")
+    # Make weight initialization and dropout repeatable too.
+    keras.utils.set_random_seed(SEED)
 
-    print(f"\nTraining the model for {epochs} epochs "
-          f"(batch size: {batch_size}, validation split: {validation_split*100:.0f}%)...")
-    print("-" * 60)
-
-    # --- Fit: run the actual training loop ---
-    # model.fit() handles everything:
-    #   - splits data into batches
-    #   - runs forward pass (predictions)
-    #   - calculates loss
-    #   - runs backward pass (adjusts weights)
-    #   - repeats for each batch and each epoch
+    print("\nTraining...")
     history = model.fit(
-        x_train,                        # Input images
-        y_train,                        # Correct labels
-        epochs=epochs,                  # How many full passes through training data
-        batch_size=batch_size,          # How many images per weight update
-        validation_split=validation_split,  # Hold out 10% of training data for validation
-        verbose=1                       # Print progress bar + metrics after each epoch
+        x_tr, y_tr,
+        validation_data=(x_val, y_val),
+        epochs=MAX_EPOCHS,
+        batch_size=BATCH_SIZE,
+        class_weight=class_weight,
+        callbacks=[early_stop],
+        verbose=2,
     )
 
-    print("-" * 60)
-    print("Training complete!")
-
-    # --- Plot the training history ---
-    # Visualising how loss and accuracy changed over epochs helps us spot
-    # problems like overfitting (training accuracy >> validation accuracy).
-    _plot_training_history(history)
-
-    return history
+    return history, len(x_tr), len(x_val)
 
 
-def _plot_training_history(history):
+# =============================================================================
+# SECTION 3: PLOT TRAINING HISTORY
+# =============================================================================
+
+def plot_history(history):
     """
-    (Private helper) Plots loss and accuracy curves for training and validation.
-
-    Two charts are created side by side:
-      Left:  Training loss vs. Validation loss over each epoch.
-      Right: Training accuracy vs. Validation accuracy over each epoch.
-
-    A good model should show both curves decreasing/increasing together.
-    If training improves but validation plateaus, the model is overfitting
-    (memorising the training data rather than generalising).
+    Draws accuracy and loss curves (train vs validation) and saves them to
+    results/training_history.png.
 
     Args:
-        history: The Keras History object returned by model.fit().
+        history: The History object returned by train_model().
     """
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-    fig.suptitle("Training History", fontsize=14)
+    # results/ is gitignored, so it won't exist on a fresh clone. Create it.
+    os.makedirs(RESULTS_DIR, exist_ok=True)
 
-    # --- Left chart: Loss ---
-    axes[0].plot(history.history["loss"],     label="Training Loss",   color="steelblue")
-    axes[0].plot(history.history["val_loss"], label="Validation Loss", color="tomato", linestyle="--")
-    axes[0].set_title("Loss over Epochs")
-    axes[0].set_xlabel("Epoch")
-    axes[0].set_ylabel("Loss")
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
 
-    # --- Right chart: Accuracy ---
-    axes[1].plot(history.history["accuracy"],     label="Training Accuracy",   color="steelblue")
-    axes[1].plot(history.history["val_accuracy"], label="Validation Accuracy", color="tomato", linestyle="--")
-    axes[1].set_title("Accuracy over Epochs")
-    axes[1].set_xlabel("Epoch")
-    axes[1].set_ylabel("Accuracy")
-    axes[1].legend()
-    axes[1].grid(True, alpha=0.3)
+    # Left chart: accuracy
+    ax1.plot(history.history["accuracy"], label="Train")
+    ax1.plot(history.history["val_accuracy"], label="Validation")
+    ax1.set_title("Accuracy")
+    ax1.set_xlabel("Epoch")
+    ax1.set_ylabel("Accuracy")
+    ax1.legend()
+
+    # Right chart: loss
+    ax2.plot(history.history["loss"], label="Train")
+    ax2.plot(history.history["val_loss"], label="Validation")
+    ax2.set_title("Loss")
+    ax2.set_xlabel("Epoch")
+    ax2.set_ylabel("Loss")
+    ax2.legend()
 
     plt.tight_layout()
-    plt.savefig("training_history.png")  # Save chart to disk
-    plt.show()
-    print("  Saved: training_history.png")
+    plt.savefig(HISTORY_PLOT_PATH)
+    plt.close(fig)   # Free memory; also avoids blocking on a window
+    print(f"  Saved: {HISTORY_PLOT_PATH}")
 
 
 # =============================================================================
-# SECTION 3: SAVE THE MODEL
+# SECTION 4: EVALUATE THE MODEL
 # =============================================================================
 
-def save_model(model, filepath="results/model.h5"):
+def evaluate_model(model, x_test, y_test):
     """
-    Saves the trained model to disk in HDF5 (.h5) format.
+    Measures accuracy on the untouched test set, overall and per group
+    (digits / uppercase / lowercase).
 
-    Why save the model?
-      Training takes time. By saving the model once it's trained, you can
-      reload it later (with keras.models.load_model("model.h5")) and make
-      predictions instantly — without retraining from scratch.
-
-    The .h5 file stores everything needed to use the model later:
-      - The architecture (layers, units, activations)
-      - The learned weights and biases
-      - The optimizer state
+    The per-group numbers show whether class weighting actually helps the rare
+    lowercase letters. Tip: run once with USE_CLASS_WEIGHTS = True and once
+    with False, then compare the groups.
 
     Args:
-        model:    The trained Keras model to save.
-        filepath: Where to save the file (default: "model.h5").
+        model:  The trained Keras model.
+        x_test: Test images, shape (N, 784).
+        y_test: Test labels, shape (N,).
+
+    Returns:
+        test_loss, test_acc, group_acc (dict of group name -> accuracy)
     """
 
-    print(f"\nSaving trained model to '{filepath}'...")
-    model.save(filepath)
-    print(f"  Model saved successfully → {filepath}")
-    print("  To reload it later:  model = keras.models.load_model('model.h5')")
+    print("\nEvaluating on the test set...")
+    test_loss, test_acc = model.evaluate(x_test, y_test, verbose=0)
+
+    # The model outputs 62 probabilities per image; argmax picks the most likely class.
+    predictions = np.argmax(model.predict(x_test, verbose=0), axis=1)
+
+    groups = {
+        "Digits (0-9)":     DIGIT_LABELS,
+        "Uppercase (A-Z)":  UPPERCASE_LABELS,
+        "Lowercase (a-z)":  LOWERCASE_LABELS,
+    }
+
+    group_acc = {}
+    for name, labels in groups.items():
+        # Select only the test images whose TRUE class belongs to this group...
+        mask = np.isin(y_test, list(labels))
+        # ...and check what fraction the model got right.
+        group_acc[name] = float(np.mean(predictions[mask] == y_test[mask]))
+        group_acc[name + " count"] = int(mask.sum())
+
+    return test_loss, test_acc, group_acc
 
 
 # =============================================================================
-# SECTION 4: MAIN — RUN THE FULL PIPELINE
+# SECTION 5: SAVE THE MODEL
+# =============================================================================
+
+def save_model(model, path=MODEL_PATH):
+    """
+    Saves the trained model so evaluate.py and demo.py can load it later.
+
+    Args:
+        model: The trained Keras model.
+        path:  Where to save it (default: results/model.h5).
+    """
+
+    # results/ is gitignored and missing on a fresh clone, so create it first.
+    # exist_ok=True means "don't complain if it's already there".
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    model.save(path)   # The .h5 extension makes Keras use the HDF5 format
+    print(f"  Saved: {path}")
+
+
+# =============================================================================
+# SECTION 6: MAIN — RUN EVERYTHING IN ORDER
 # =============================================================================
 
 if __name__ == "__main__":
-    # This block runs only when you execute this file directly, e.g.:
-    #   python src/model.py
-    # It won't run when another file imports functions from here.
+    # Runs only when you execute this file directly:  python src/model.py
 
-    # We import data_loader from the same src/ directory.
-    # If you're running from the project root, Python needs to find the module.
-    import sys
-    import os
-    sys.path.append(os.path.dirname(__file__))  # Add src/ to the module search path
-    from data_loader import load_data, preprocess_data
+    # Step 1: Load and preprocess the data (normalized, flattened to 784)
+    x_train, y_train, x_test, y_test = load_data()
+    x_train, x_test = preprocess_data(x_train, x_test)
 
-    print("=" * 60)
-    print("  MNIST DIGIT CLASSIFIER — FULL TRAINING PIPELINE")
-    print("=" * 60)
-
-    # --- Step 1: Load the raw data ---
-    x_train_raw, y_train, x_test_raw, y_test = load_data()
-
-    # --- Step 2: Preprocess the data (normalize + flatten) ---
-    x_train, x_test = preprocess_data(x_train_raw, x_test_raw)
-
-    # --- Step 3: Build the model ---
+    # Step 2: Build the model
     model = build_model()
 
-    # --- Step 4: Train the model ---
-    # epochs=10 means the model will see the full training set 10 times.
-    # Feel free to increase this (e.g., epochs=20) for potentially higher accuracy.
-    history = train_model(model, x_train, y_train, epochs=10)
+    # Step 3: Train it
+    history, n_train, n_val = train_model(model, x_train, y_train)
+    epochs_trained = len(history.history["loss"])
+    best_epoch = int(np.argmin(history.history["val_loss"])) + 1
 
-    # --- Step 5: Evaluate on the test set ---
-    # The test set was never seen during training, so this is a fair measure
-    # of how well the model generalises to brand-new, unseen handwriting.
-    print("\nEvaluating model on the test set...")
-    test_loss, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
-    print(f"  Test Loss     : {test_loss:.4f}")
-    print(f"  Test Accuracy : {test_accuracy * 100:.2f}%")
+    # Step 4: Plot and save the training history
+    print("\nSaving training history plot...")
+    plot_history(history)
 
-    # --- Step 6: Save the trained model ---
-    save_model(model, filepath="results/model.h5")
+    # Step 5: Evaluate on the test set
+    test_loss, test_acc, group_acc = evaluate_model(model, x_test, y_test)
 
-    # --- Step 7: Final summary ---
-    print("\n" + "=" * 60)
-    print("  PIPELINE COMPLETE — SUMMARY")
-    print("=" * 60)
-    print(f"  Training samples : {x_train.shape[0]}")
-    print(f"  Test samples     : {x_test.shape[0]}")
-    print(f"  Input shape      : {x_train.shape[1]} features (28×28 pixels, flattened)")
-    print(f"  Output classes   : 10 (digits 0–9)")
-    print(f"  Epochs trained   : 10")
-    print(f"  Test Accuracy    : {test_accuracy * 100:.2f}%")
-    print(f"  Model saved to   : model.h5")
-    print("=" * 60)
-    print("\nmodel.py finished. Your trained model is ready for evaluation and demo!")
+    # Step 6: Save the model
+    print("\nSaving model...")
+    save_model(model, MODEL_PATH)
+
+    # Step 7: Final summary (everything printed here is a real variable)
+    print("\n========== MODEL SUMMARY ==========")
+    print(f"  Number of classes        : {NUM_CLASSES}")
+    print(f"  Training images used     : {n_train}")
+    print(f"  Validation images used   : {n_val}")
+    print(f"  Class weights used       : {USE_CLASS_WEIGHTS}")
+    print(f"  Epochs trained           : {epochs_trained} (max {MAX_EPOCHS})")
+    print(f"  Best epoch (restored)    : {best_epoch}")
+    print(f"  Test loss                : {test_loss:.4f}")
+    print(f"  Test accuracy (overall)  : {test_acc:.4f} ({test_acc * 100:.2f}%)")
+    print("  --- Per-group test accuracy ---")
+    for name in ("Digits (0-9)", "Uppercase (A-Z)", "Lowercase (a-z)"):
+        print(f"  {name:<24}: {group_acc[name] * 100:.2f}%  "
+              f"({group_acc[name + ' count']} test images)")
+    print(f"  Model saved to           : {MODEL_PATH}")
+    print(f"  History plot saved to    : {HISTORY_PLOT_PATH}")
+    print("===================================")
+    print("\nmodel.py finished.")
