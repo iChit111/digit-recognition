@@ -257,8 +257,11 @@ def preprocess_data(x_train, x_test):
     print("\nPreprocessing data...")
 
     # --- Step 3a: Normalize pixel values ---
-    x_train_normalized = x_train / 255.0
-    x_test_normalized  = x_test  / 255.0
+    # float32 on purpose: dividing a uint8 array by 255.0 gives float64 by
+    # default, which is ~4.4 GB for 698k images (and train_test_split copies it).
+    # Keras trains in float32 anyway, so float64 is pure waste.
+    x_train_normalized = x_train.astype("float32") / 255.0
+    x_test_normalized  = x_test.astype("float32") / 255.0
 
     print(f"  Pixel value range (after normalization): "
           f"{x_train_normalized.min():.1f} – {x_train_normalized.max():.1f}")

@@ -165,9 +165,6 @@ def train_model(model, x_train, y_train):
         verbose=1,
     )
 
-    # Make weight initialization and dropout repeatable too.
-    keras.utils.set_random_seed(SEED)
-
     print("\nTraining...")
     history = model.fit(
         x_tr, y_tr,
@@ -294,6 +291,9 @@ def save_model(model, path=MODEL_PATH):
 
 if __name__ == "__main__":
     # Runs only when you execute this file directly:  python src/model.py
+    # Seed FIRST. Weight initialization happens inside build_model(), so
+    # seeding after it (as train_model() used to) leaves the starting weights random.
+    keras.utils.set_random_seed(SEED)
 
     # Step 1: Load and preprocess the data (normalized, flattened to 784)
     x_train, y_train, x_test, y_test = load_data()
