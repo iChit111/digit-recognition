@@ -17,8 +17,8 @@
 import os                                    # For creating folders / building paths
 import numpy as np                           # For working with numbers and arrays
 import matplotlib.pyplot as plt              # For drawing the training-history chart
-from tensorflow import keras                 # The deep learning library (Keras API)
-from tensorflow.keras import layers          # Building blocks (Dense, Dropout, ...)
+import keras                 # The deep learning library (Keras API)
+from keras import layers          # Building blocks (Dense, Dropout, ...)
 from sklearn.model_selection import train_test_split  # Shuffled/stratified split
 
 # Our own project files (they live in the same src/ folder).
@@ -53,9 +53,14 @@ HISTORY_PLOT_PATH = "results/training_history.png"
 # SECTION 1: BUILD THE MODEL
 # =============================================================================
 
-def build_model():
+def build_model(input_dim=784):
     """
     Builds the dense neural network (not trained yet).
+
+    Args:
+        input_dim: Number of input values per example. 784 (all pixels) here;
+                   phase5_models.py passes its own count (selected pixels +
+                   shape features) to train the same architecture.
 
     Architecture:
         Input (784 pixels)
@@ -71,7 +76,7 @@ def build_model():
         # An explicit Input layer tells Keras the shape of one example:
         # 784 numbers (a flattened 28x28 image). This replaces the old,
         # deprecated "input_shape=" argument on the first Dense layer.
-        keras.Input(shape=(784,)),
+        keras.Input(shape=(input_dim,)),
 
         # Hidden layer 1: 512 "neurons". Wider than the old MNIST model (128)
         # because telling apart 62 classes needs more capacity than 10.

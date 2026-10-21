@@ -209,5 +209,6 @@ __marimo__/
 # Project Specific
 results/model.h5
 results/*.png
+data/
 *.ipynb_checkpoints
 *.pyc

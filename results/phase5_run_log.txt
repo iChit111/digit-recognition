@@ -1,0 +1,139 @@
+﻿
+======================================================================
+  DATA
+======================================================================
+Loading processed dataset from 'data/emnist_processed.csv'...
+  Loaded: 50000 rows, 800 columns
+  Train: 40000 rows   Test: 10000 rows
+  Features: 687 pixels + 7 shape features = 694 columns
+
+======================================================================
+  TRAINING
+======================================================================
+  Logistic Regression...
+    accuracy 71.56%  (fit 51s)
+  Random Forest...
+    accuracy 77.34%  (fit 12s)
+  SVM (RBF)...
+    PCA: 50 components keep 87.1% of pixel variance
+    accuracy 80.90%  (fit 36s)
+  KNN (k=5)...
+    accuracy 76.38%  (fit 0s)
+  Dense Neural Network...
+Model: "sequential"
+┌─────────────────────────────────┬────────────────────────┬───────────────┐
+│ Layer (type)                    │ Output Shape           │       Param # │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ dense (Dense)                   │ (None, 512)            │       355,840 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ dropout (Dropout)               │ (None, 512)            │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ dense_1 (Dense)                 │ (None, 256)            │       131,328 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ dropout_1 (Dropout)             │ (None, 256)            │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ dense_2 (Dense)                 │ (None, 62)             │        15,934 │
+└─────────────────────────────────┴────────────────────────┴───────────────┘
+ Total params: 503,102 (1.92 MB)
+ Trainable params: 503,102 (1.92 MB)
+ Non-trainable params: 0 (0.00 B)
+    stopped after 21 epochs (best: 16)
+    accuracy 80.36%  (fit 39s)
+
+  Saved: results/phase5_model_comparison.csv
+
+======================================================================
+  MODEL COMPARISON (test split, 10,000 images)
+======================================================================
+                      accuracy  precision_macro  recall_macro  f1_macro  f1_weighted
+model                                                                               
+Logistic Regression      71.56            56.91         53.65     54.64        70.44
+Random Forest            77.34            66.07         54.98     56.69        74.51
+SVM (RBF)                80.90            68.77         62.30     63.16        78.36
+KNN (k=5)                76.38            64.47         55.86     58.05        74.55
+Dense Neural Network     80.36            68.26         65.08     65.46        78.89
+  (all values in %; 'macro' = every class counts equally, so rare classes matter;
+   'weighted' = classes count by how often they occur)
+
+  Accuracy per character group (%) and share of errors that are case-only:
+                      acc_digit  acc_uppercase  acc_lowercase  case_only_error_share
+model                                                                               
+Logistic Regression        85.6           58.9           56.6                   13.5
+Random Forest              92.3           65.1           60.0                   16.3
+SVM (RBF)                  93.7           73.9           62.1                   19.7
+KNN (k=5)                  90.6           64.9           59.8                   18.6
+Dense Neural Network       92.9           71.1           64.6                   22.2
+
+  Time (seconds):
+                      fit_seconds  predict_seconds
+model                                             
+Logistic Regression          50.8              0.1
+Random Forest                11.6              0.5
+SVM (RBF)                    36.1             47.4
+KNN (k=5)                     0.4              0.5
+Dense Neural Network         39.3              0.7
+
+======================================================================
+  PLOTS
+======================================================================
+  Saved: results\phase5_01_model_comparison.png
+  Saved: results\phase5_02_accuracy_per_group.png
+  Saved: results\phase5_03_confusion_matrix_best.png
+
+======================================================================
+  BEST MODEL IN DETAIL — SVM (RBF)
+======================================================================
+  Easiest classes (highest F1):
+    '7': F1 0.96  (n=512)
+    '3': F1 0.95  (n=503)
+    '6': F1 0.95  (n=490)
+    'e': F1 0.94  (n=353)
+    '8': F1 0.92  (n=486)
+    'd': F1 0.92  (n=146)
+    '9': F1 0.92  (n=485)
+    'r': F1 0.91  (n=202)
+  Hardest classes (lowest F1):
+    'm': F1 0.00  (n=38)
+    'o': F1 0.00  (n=39)
+    's': F1 0.00  (n=39)
+    'u': F1 0.00  (n=41)
+    'f': F1 0.00  (n=37)
+    'c': F1 0.00  (n=41)
+    'l': F1 0.03  (n=219)
+    'p': F1 0.05  (n=35)
+  Most frequent mistakes (true -> predicted):
+    'l' -> '1': 199 times
+    'O' -> '0': 161 times
+    'I' -> '1': 98 times
+    '0' -> 'O': 65 times
+    '5' -> 'S': 42 times
+    'm' -> 'M': 38 times  (case only)
+    'S' -> '5': 38 times
+    'c' -> 'C': 36 times  (case only)
+    'u' -> 'U': 34 times  (case only)
+    'f' -> 'F': 32 times  (case only)
+    'p' -> 'P': 31 times  (case only)
+    'v' -> 'V': 30 times  (case only)
+
+======================================================================
+  McNEMAR'S TEST — SVM (RBF) vs Dense Neural Network
+======================================================================
+  H0: both models have the same accuracy on this test set
+  Images only SVM (RBF) got right            : 459
+  Images only Dense Neural Network got right : 405
+  p-value = 0.071  -> NOT significant: the gap could be chance
+
+======================================================================
+  CONCLUSION
+======================================================================
+  Top models : SVM (RBF) (80.90%) and Dense Neural Network (80.36%) are statistically tied (0.5 pp, p = 0.071).
+               Dense Neural Network has the higher macro F1 (65.46%), i.e. it handles rare classes better.
+  Weakest    : Logistic Regression (71.56%) — a linear model cannot
+               capture curved stroke shapes even with interaction features.
+  Digits are recognised far better than letters in every model. The errors come
+  from characters that are drawn the same way: l / I -> 1, O <-> 0, S <-> 5, and
+  case-only pairs (m/M, c/C, u/U...: 20% of SVM (RBF)'s errors). Lowercase
+  look-alikes are almost never predicted, because their uppercase twin is more
+  common in the training data — the class imbalance found in Phases 1 and 3.
+
+phase5_models.py finished.

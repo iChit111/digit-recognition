@@ -1,8 +1,10 @@
 tensorflow
 numpy
-matplotlib
+scipy
 pandas
+matplotlib
 scikit-learn
+seaborn
 jupyter
 pillow
 tensorflow-datasets

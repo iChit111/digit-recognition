@@ -125,8 +125,9 @@ def _fix_emnist_orientation(images):
 
     This bug is documented directly on TFDS's own catalog page for this
     dataset. The fix is: transpose the height/width axes (undoes the
-    rotation), then flip left-right (undoes the mirroring). We do this with
-    plain numpy since we've already pulled the data out of TF tensors.
+    rotation and mirroring in one step, since the two together are exactly a
+    transpose). We do this with plain numpy since we've already pulled the
+    data out of TF tensors.
 
     Args:
         images: array of shape (N, 28, 28), as loaded from TFDS.
@@ -136,10 +137,9 @@ def _fix_emnist_orientation(images):
     """
     # axes=(0, 2, 1) swaps the row/column axes for every image in the batch
     # (leaves the batch dimension, axis 0, alone) — this is the "un-rotate" step.
-    images = np.transpose(images, axes=(0, 2, 1))
-    # Flip along the last axis (columns) to undo the horizontal mirroring.
-    images = np.flip(images, axis=2)
-    return images
+    # A transpose alone fixes EMNIST: "rotated 90 + mirrored" IS a transpose,
+    # so no extra flip is needed (adding one mirrors the images).
+    return np.transpose(images, axes=(0, 2, 1))
 
 
 # =============================================================================
